@@ -14,11 +14,7 @@ import (
 	"time"
 )
 
-type request struct {
-	Urls []string `json:"urls"`
-}
-
-// В ТЗ не сказано, что должно возвращаться в json
+// В ТЗ не сказано, что должно возвращаться в json - поэтому статусы)
 type response struct {
 	Url map[string]string
 }
@@ -33,7 +29,7 @@ func (u *response) fetch(ctx context.Context, url string) {
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err == nil {
-		res.Body.Close()
+		_ = res.Body.Close()
 		u.Url[url] = res.Status
 	}
 }
@@ -44,20 +40,20 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		req request
-		u   = response{Url: make(map[string]string)}
+		u    = response{Url: make(map[string]string)}
+		urls []string
 	)
 
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil || len(req.Urls) > 20 {
+	err := json.NewDecoder(r.Body).Decode(&urls)
+	if err != nil || len(urls) > 20 {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	var wg sync.WaitGroup
-	wg.Add(len(req.Urls))
-	for _, url := range req.Urls {
+	wg.Add(len(urls))
+	for _, url := range urls {
 		go func(url string) {
 			u.fetch(ctx, url)
 			wg.Done()
@@ -94,7 +90,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Listen: %v", err)
 	}
-	defer l.Close()
+	defer func() {
+		_ = l.Close()
+	}()
 
 	l = limiter.LimitListener(l, 100)
 
